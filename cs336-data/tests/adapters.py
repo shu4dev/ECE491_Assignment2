@@ -1,28 +1,27 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-
+from cs336_data.extract import extract_text
+from cs336_data.language_identification import language_identification
+from cs336_data.pii import pii
 import os
 from typing import Any
-
+li = language_identification()
+pid = pii()
 
 def run_extract_text_from_html_bytes(html_bytes: bytes) -> str | None:
-    raise NotImplementedError
-
+    return extract_text(html_bytes)
 
 def run_identify_language(text: str) -> tuple[Any, float]:
-    raise NotImplementedError
-
+    return li.predict(text)
 
 def run_mask_emails(text: str) -> tuple[str, int]:
-    raise NotImplementedError
-
+    return pid.mask_emails(text)
 
 def run_mask_phone_numbers(text: str) -> tuple[str, int]:
-    raise NotImplementedError
-
+    return pid.mask_phone_numbers(text)
 
 def run_mask_ips(text: str) -> tuple[str, int]:
-    raise NotImplementedError
+    return pid.mask_ips(text)
 
 
 def run_classify_nsfw(text: str) -> tuple[Any, float]:

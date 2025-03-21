@@ -3,8 +3,13 @@ from __future__ import annotations
 from cs336_data.extract import extract_text
 from cs336_data.language_identification import language_identification
 from cs336_data.pii import pii
+from cs336_data.toxicity import toxicity
+from cs336_data.quality import gopher
 import os
 from typing import Any
+
+qt = gopher()
+tox = toxicity()
 li = language_identification()
 pid = pii()
 
@@ -25,11 +30,11 @@ def run_mask_ips(text: str) -> tuple[str, int]:
 
 
 def run_classify_nsfw(text: str) -> tuple[Any, float]:
-    raise NotImplementedError
+    return tox.classify_nsfw(text)
 
 
 def run_classify_toxic_speech(text: str) -> tuple[Any, float]:
-    raise NotImplementedError
+    return tox.classify_toxic(text)
 
 
 def run_classify_quality(text: str) -> tuple[Any, float]:
@@ -37,8 +42,7 @@ def run_classify_quality(text: str) -> tuple[Any, float]:
 
 
 def run_gopher_quality_filter(text: str) -> bool:
-    raise NotImplementedError
-
+    return qt.classify_quality(text)
 
 def run_exact_line_deduplication(
     input_files: list[os.PathLike], output_directory: os.PathLike

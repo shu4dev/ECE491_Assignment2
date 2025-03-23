@@ -1,6 +1,6 @@
-import nltk
+import torch
 from nltk import word_tokenize
-nltk.download('punkt_tab')
+from cs336_basics.model import TextClassifier
 class gopher:
     def classify_quality(self, text: str) -> bool:
         tokens = word_tokenize(text)
@@ -17,3 +17,30 @@ class gopher:
         if len(alpha_tokens) / len(tokens) < 0.8:
             return False
         return True
+
+class quality_classifier:
+    def __init__(self):
+        self.model_dir = "/home/shu4/koa_scratch/ECE491_Assignment2/cs336-data/cs336_data/model"
+        self.model = TextClassifier.from_pretrained(self.model_dir)
+        self.context_length = self.model.context_length
+        self.model.eval()
+
+    def char_tokenize(self, text: str, max_length: int) -> torch.LongTensor:
+        tokens = [ord(c) % 10000 for c in text]
+        if len(tokens) > max_length:
+            tokens = tokens[:max_length]
+        else:
+            tokens = tokens + [0] * (max_length - len(tokens))
+        return torch.tensor(tokens, dtype=torch.long)
+    
+    def predict(self, text: str) -> tuple[int, float]:
+        input_ids = self.char_tokenize(text, 512)
+        input_ids = input_ids.unsqueeze(0)
+        with torch.no_grad():
+            logits = self.model(input_ids)
+            probabilities = torch.softmax(logits, dim=-1)
+            predicted_class = torch.argmax(probabilities, dim=-1)
+            confidence = probabilities.max().item()
+            print("Predicted class:", predicted_class.item())
+            print("Confidence score:", confidence)
+            return predicted_class.item(), confidence      

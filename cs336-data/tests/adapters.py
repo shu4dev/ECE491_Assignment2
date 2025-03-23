@@ -5,9 +5,11 @@ from cs336_data.language_identification import language_identification
 from cs336_data.pii import pii
 from cs336_data.toxicity import toxicity
 from cs336_data.quality import gopher
+from cs336_data.quality import quality_classifier
 import os
 from typing import Any
 
+qcls = quality_classifier()
 qt = gopher()
 tox = toxicity()
 li = language_identification()
@@ -38,7 +40,7 @@ def run_classify_toxic_speech(text: str) -> tuple[Any, float]:
 
 
 def run_classify_quality(text: str) -> tuple[Any, float]:
-    raise NotImplementedError
+    return qcls.predict(text)
 
 
 def run_gopher_quality_filter(text: str) -> bool:

@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""
-Optimized version of the assignment 1 (basics) model, where
-the hand-written components are replaced with PyTorch equivalents
-where possible:
 
-- hand-crafted softmax -> F.softmax
-- hand-crafted gelu -> F.gelu
-- hand-crafted causal multi-head self attention -> nn.MultiHeadAttention
-"""
 from __future__ import annotations
 
 import json
@@ -26,15 +18,6 @@ class RMSNorm(nn.Module):
     """
     This module implements root mean square layer normalization, as
     described in Eq. 4 of https://arxiv.org/abs/1910.07467
-
-    Args:
-        hidden_size: int
-            Dimensionality of the input to normalize.
-        eps: float, default is 1e-5
-            A value added to the denominator for numerical stability.
-
-    Returns:
-        FloatTensor of same shape as input.
     """
 
     def __init__(
@@ -47,29 +30,17 @@ class RMSNorm(nn.Module):
         self.eps = eps
 
     def forward(self, x):
-        """
-        Args:
-            x: FloatTensor of shape `(batch_size, *)`.
-                The input to apply root mean square layer normalization on.
-
-        Returns:
-            FloatTensor of same shape as input
-        """
-        # NOTE: in practice, many implementations will
-        # manually upcast the input to fp32 here to prevent overflow when you
-        # square the input.
-        # https://github.com/pytorch/pytorch/issues/66707
         rms = torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
         x = x * rms
         return self.weight * x
 
 
-class TransformerLM(nn.Module):
-    """A Transformer language model.
+class TextClassifier(nn.Module):
+    """A Transformer-based text classifier.
 
     Args:
         vocab_size: int
-            The number of unique items in the output vocabulary to be predicted.
+            The number of unique items in the vocabulary.
         context_length: int,
             The maximum number of tokens to process at once.
         d_model: int
@@ -77,21 +48,19 @@ class TransformerLM(nn.Module):
         num_layers: int
             The number of Transformer layers to use.
         num_heads: int
-            Number of heads to use in multi-headed attention. `d_model` must be
-            evenly divisible by `num_heads`.
+            Number of heads to use in multi-headed attention.
         d_ff: int
-            Dimensionality of the feed-forward inner layer (section 3.3).
+            Dimensionality of the feed-forward inner layer.
+        num_classes: int
+            Number of classification categories (default: 2 for binary classification).
         attn_pdrop: Optional[float], default is None.
-            If given, drop-out the attention probabilities (the softmax-normalized
-            attention scores) with this rate.
+            If given, drop-out the attention probabilities with this rate.
         residual_pdrop: Optional[float], default is None.
             If given, apply dropout to the sum of the token and position embeddings
-            as well as the output of each sub-layer, before it is added to the
-            sub-layer input and normalized (section 5.4).
+            and to the output of each sub-layer.
 
     Returns:
-        FloatTensor of shape (batch size, sequence_length, vocab_size) with the
-        predicted unnormalized next-word distribution for each token.
+        FloatTensor of shape (batch size, num_classes) with the classification logits.
     """
 
     def __init__(
@@ -102,6 +71,7 @@ class TransformerLM(nn.Module):
         num_layers: int,
         num_heads: int,
         d_ff: int,
+        num_classes: int = 2,
         attn_pdrop: Optional[float] = None,
         residual_pdrop: Optional[float] = None,
     ):
@@ -129,22 +99,24 @@ class TransformerLM(nn.Module):
             ]
         )
         self.ln_final = RMSNorm(d_model)
-        self.lm_head = nn.Linear(d_model, vocab_size, bias=False)
-        # Tie the weights, since the paper mentions that "we share the same weight
-        # matrix between the two embedding layers and the pre-softmax linear transformation"
-        self.lm_head.weight = self.token_embeddings.weight
+        
+        # Instead of a language model head, add a classification head
+        self.classifier = nn.Sequential(
+            nn.Linear(d_model, d_model // 2),
+            nn.GELU(),
+            nn.Linear(d_model // 2, num_classes),
+        )
+        
         self.residual_pdrop = residual_pdrop
         # report number of parameters
         logger.info(
-            "number of non-embedding parameters: %.2fM" % (self.get_num_params() / 1e6,)
+            "number of parameters: %.2fM" % (self.get_num_params() / 1e6,)
         )
 
     def get_num_params(self, non_embedding=True):
         """
         Return the number of parameters in the model.
         For non-embedding count (default), the position embeddings get subtracted.
-        The token embeddings would too, except due to the parameter sharing these
-        params are actually used as weights in the final layer, so we include them.
         """
         n_params = sum(p.numel() for p in self.parameters())
         if non_embedding:
@@ -155,16 +127,14 @@ class TransformerLM(nn.Module):
         """
         Args:
             x: LongTensor of shape `(batch_size, sequence_length)`.
-                Input IDs for language modeling.
+                Input token IDs.
 
         Returns: A FloatTensor of shape
-            (batch size, sequence_length, vocab_size) with the predicted unnormalized next-word
-            distribution for each token.
+            (batch size, num_classes) with the classification logits.
         """
-        _, sequence_length = x.size()
+        batch_size, sequence_length = x.size()
+        
         # (batch size, sequence_length, d_model)
-        # NOTE: paper mentions "In the embedding layers, we multiply those
-        # weights by sqrt(d_model)", but we aren't doing that here.
         embedded_tokens = self.token_embeddings(x)
 
         # Shape: (1, sequence_length)
@@ -181,71 +151,18 @@ class TransformerLM(nn.Module):
         for layer in self.layers:
             # (batch size, sequence_length, d_model)
             x = layer(x)
+        
         # (batch size, sequence_length, d_model)
         x = self.ln_final(x)
-        # (batch size, sequence_length, vocab_size)
-        logits = self.lm_head(x)
+        
+        # Global average pooling over sequence dimension
+        # (batch size, d_model)
+        x = x.mean(dim=1)
+        
+        # (batch size, num_classes)
+        logits = self.classifier(x)
+        
         return logits
-
-    @torch.no_grad()
-    def generate(
-        self,
-        x: torch.Tensor,
-        max_new_tokens: int,
-        temperature: float = 1.0,
-        top_k: Optional[int] = None,
-        eos_token_id: Optional[int] = None,
-    ):
-        """
-        Args:
-            x: LongTensor of shape `(1, sequence_length,)` or `(sequence_length, )`.
-                Input IDs to condition on when generating.
-            max_new_tokens: int
-                Maximum number of tokens to generate.
-            temperature: float
-                Temperature to use during generation.
-            top_k: int
-                If provided, only sample from the `top_k` vocab items (by probability).
-            eos_token_id: int
-                If provided, stop generation when we generate this ID.
-
-        Returns: A LongTensor of shape (max_new_tokens,) with the generated model output.
-        """
-        if x.dim() == 1:
-            x = x.unsqueeze(0)
-        original_sequence_length = x.size(-1)
-        for _ in range(max_new_tokens):
-            # Take the last `context_length` tokens if the input is
-            # beyond the model's context length
-            x = x[:, -self.context_length :] if x.size(1) > self.context_length else x
-            # Get the logits from the model
-            logits = self.forward(x)
-            # Take the logits for the next token
-            next_token_logits = logits[:, -1]
-            # apply temperature scaling
-            temperature_scaled_next_token_logits = next_token_logits / temperature
-            # If top-k is provided, take the tokens with the highest score
-            if top_k:
-                topk_values, _ = torch.topk(
-                    temperature_scaled_next_token_logits,
-                    min(top_k, temperature_scaled_next_token_logits.size(-1)),
-                )
-                # Get the score of the kth item that we kept---items with lower scores should be masked.
-                threshold = topk_values[:, -1]
-                topk_mask = temperature_scaled_next_token_logits < threshold
-                temperature_scaled_next_token_logits.masked_fill(
-                    topk_mask, float("-inf")
-                )
-            next_token_probabilities = F.softmax(
-                temperature_scaled_next_token_logits, dim=-1
-            )
-            next_token_id = torch.multinomial(next_token_probabilities, 1)
-            # End generation if we see the EOS token ID
-            if eos_token_id is not None and next_token_id.item() == eos_token_id:
-                break
-            x = torch.cat((x, next_token_id), dim=-1)
-        new_token_ids = x[:, original_sequence_length:]
-        return new_token_ids
 
     @classmethod
     def from_pretrained(cls, pretrained_model_path: str):
@@ -260,35 +177,13 @@ class TransformerLM(nn.Module):
         unwanted_prefix = "_orig_mod."
         for k, _ in list(state_dict.items()):
             if k.startswith(unwanted_prefix):
-                state_dict[k[len(unwanted_prefix) :]] = state_dict.pop(k)
+                state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
         model.load_state_dict(state_dict)
         return model
 
 
 class TransformerBlock(nn.Module):
-    """A single Transformer layer.
-
-    This implements a single layer of the Transformer, as described in section 3.1
-    of the paper.
-
-    Args:
-        d_model: int
-            The dimensionality of the model embeddings and sublayer outputs.
-        num_heads: int
-            Number of heads to use in multi-headed attention. `d_model` must be
-            evenly divisible by `num_heads`.
-        d_ff: int
-            Dimensionality of the feed-forward inner layer (section 3.3).
-        attn_pdrop: Optional[float], default is None.
-            If given, drop-out the attention probabilities (the softmax-normalized
-            attention scores) with this rate.
-        residual_pdrop: Optional[float], default is None.
-            If given, apply dropout to the output of each sub-layer, before it is added
-            to the sub-layer input and normalized (section 5.4).
-
-    Returns:
-        FloatTensor of shape `(batch_size, sequence_length, d_model)`.
-    """
+    """A single Transformer layer."""
 
     def __init__(
         self,
@@ -316,16 +211,6 @@ class TransformerBlock(nn.Module):
         self.residual_pdrop = residual_pdrop
 
     def forward(self, x: torch.Tensor):
-        """
-        Args:
-            x: FloatTensor of shape `(batch_size, sequence_length, d_model)`.
-                The input to process with the Transformer block.
-
-        Returns:
-            FloatTensor of shape `(batch_size, sequence_length, d_model)`.
-        """
-        # NOTE: this is a pre-norm Transformer, and differs from the original
-        # description in the paper.
         # Apply the multi-head self-attention sublayer
         x_ln = self.ln1(x)
         causal_mask = nn.Transformer.generate_square_subsequent_mask(x.size(1))

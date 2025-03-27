@@ -6,6 +6,8 @@ from cs336_data.pii import pii
 from cs336_data.toxicity import toxicity
 from cs336_data.quality import gopher
 from cs336_data.quality import quality_classifier
+from cs336_data.deduplication import exact_deduplication
+from cs336_data.minhash_deduplication import fuzzy_deduplication
 import os
 from typing import Any
 
@@ -49,7 +51,7 @@ def run_gopher_quality_filter(text: str) -> bool:
 def run_exact_line_deduplication(
     input_files: list[os.PathLike], output_directory: os.PathLike
 ):
-    raise NotImplementedError
+    return exact_deduplication(input_files, output_directory)
 
 
 def run_minhash_deduplication(
@@ -60,4 +62,7 @@ def run_minhash_deduplication(
     jaccard_threshold: float,
     output_directory: os.PathLike,
 ):
-    raise NotImplementedError
+    return fuzzy_deduplication(
+        input_files, num_hashes, num_bands, ngrams, jaccard_threshold, output_directory
+    )
+    

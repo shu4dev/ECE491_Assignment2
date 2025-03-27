@@ -114,6 +114,7 @@ def test_minhash_deduplication_fuzzy_duplicates(tmp_path):
         jaccard_threshold=0.8,
     )
     output_filepaths = list(tmp_path.glob("*"))
+    print(output_filepaths)
     assert len(output_filepaths) == 2
     for filepath in output_filepaths:
         with xopen(filepath) as f:

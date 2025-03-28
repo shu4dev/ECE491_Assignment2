@@ -3,9 +3,11 @@ import mmh3
 import random
 import string
 import unicodedata
+import nltk
 from nltk.tokenize import word_tokenize
 from nltk.util import ngrams
 from pathlib import Path
+nltk.download('punkt_tab')
 def generate_ngrams(n:int, text:str) -> list[str]:
     normalized_text = normalize(text)
     n_grams = ngrams(word_tokenize(normalized_text), n)

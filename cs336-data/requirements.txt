@@ -1,3 +1,5 @@
 xopen
 resiliparse
 fasttext
+mmh3
+numpy==1.26.4

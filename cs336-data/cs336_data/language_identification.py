@@ -1,8 +1,10 @@
 import fasttext
+from huggingface_hub import hf_hub_download
+model = hf_hub_download(repo_id="shu4dev/lid", filename="lid.176.bin")
 
 class language_identification:
     def __init__(self):
-        self.model = fasttext.load_model('cs336-data/cs336_data/model/lid.176.bin')
+        self.model = fasttext.load_model(model)
 
     def predict(self, text):
         text = text.replace("\n", "")

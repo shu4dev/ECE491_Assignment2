@@ -1,9 +1,12 @@
 import fasttext
+from huggingface_hub import hf_hub_download
 
+nsfw_model = hf_hub_download(repo_id="shu4dev/nsfw", filename="jigsaw_fasttext_bigrams_nsfw_final.bin")
+toxic_model = hf_hub_download(repo_id="shu4dev/toxic", filename="jigsaw_fasttext_bigrams_hatespeech_final.bin")
 class toxicity:
     def __init__(self):
-        self.nsfw_model = fasttext.load_model('cs336-data/cs336_data/model/jigsaw_fasttext_bigrams_nsfw_final.bin')
-        self.toxic_model = fasttext.load_model('cs336-data/cs336_data/model/jigsaw_fasttext_bigrams_hatespeech_final.bin')
+        self.nsfw_model = fasttext.load_model(nsfw_model)
+        self.toxic_model = fasttext.load_model(toxic_model)
     def classify_nsfw(self, text):
         text = text.replace("\n", "")
         result = self.nsfw_model.predict(text)

@@ -1,6 +1,8 @@
 import torch
 from nltk import word_tokenize
 from cs336_basics.model import TextClassifier
+from huggingface_hub import snapshot_download
+model_dir = snapshot_download(repo_id="shu4dev/quality")
 class gopher:
     def classify_quality(self, text: str) -> bool:
         tokens = word_tokenize(text)
@@ -20,7 +22,7 @@ class gopher:
 
 class quality_classifier:
     def __init__(self):
-        self.model_dir = "/home/shu4/koa_scratch/ECE491_Assignment2/cs336-data/cs336_data/model"
+        self.model_dir = model_dir
         self.model = TextClassifier.from_pretrained(self.model_dir)
         self.context_length = self.model.context_length
         self.model.eval()
@@ -44,3 +46,18 @@ class quality_classifier:
             print("Predicted class:", predicted_class.item())
             print("Confidence score:", confidence)
             return predicted_class.item(), confidence      
+
+if __name__=='__main__':
+    model = gopher()
+    for i in range(20):
+        file_path = f'data/extract_warc{i+1}.txt'
+        with open(file_path) as f:
+            text = f.read()
+            pred = model.classify_quality(text)
+            print(f'Sample{i+1}')
+            print("-"*20)
+            if pred == True:
+                print(f'Sample{i+1} is high-quality')
+            else:
+                print(f'Sample{i+1} is low-quality')
+            print("-"*20)

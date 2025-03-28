@@ -15,9 +15,8 @@ def extract_text(html_bytes: bytes) -> str:
     return extract_plain_text(html_str)
 
 if __name__=='__main__':
-    input_path = 'subsampled_positive_urls.warc.gz'
+    input_path = 'data/CC-MAIN-20180420081400-20180420101400-00118.warc.gz'
     records = read_warc_file(input_path)
-    
     count = 0
     for record in tqdm(records):
         count += 1
